@@ -41,7 +41,7 @@ def tik_reboot(ip):
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             ssh.connect(ip, username=suo_tik_login, password=suo_tik_pass)
             ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("sudo reboot")
-            ssh_stdin.write('P@ssw0rd!DP\n')
+            ssh_stdin.write(suo_tik_pass + '\n')
             ssh_stdin.flush()
             output = ssh_stdout.read()
             print(output)
