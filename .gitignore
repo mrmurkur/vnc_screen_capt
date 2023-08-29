@@ -1,3 +1,5 @@
 tik_conf.ini
 *.sh
 *.txt
+*.png
+*.log
