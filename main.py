@@ -21,6 +21,8 @@ dest_email_2 = config["mail"]["dest_email_2"]
 dest_email = config["mail"]["dest_email"]
 suo_tik_login = config["tik"]["login"]
 suo_tik_pass  = config["tik"]["password"]
+stik_login = config["stik"]["login"]
+stik_pass  = config["stik"]["password"]
 body_letter = ""
 ok_cnt = 0
 ssh = paramiko.SSHClient()
@@ -33,14 +35,14 @@ for filename_sh in os.listdir(work_dir):
         subprocess.call(['bash', work_dir + filename_sh])
 
 # Функция для подключения по ssh к неисправному устройству с целью перезагрузки.
-def tik_reboot(ip):
+def suo_tik_reboot(ip):
     response = os.system("fping " + ip + " >/dev/null")
     if response == 0:
         try:
             print('\nConnecting to ' + ip)
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(ip, username=suo_tik_login, password=suo_tik_pass)
-            ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("sudo reboot")
+            ssh.connect(ip, username = suo_tik_login, password = suo_tik_pass, port = 22349)
+            ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("sudo -S reboot")
             ssh_stdin.write(suo_tik_pass + '\n')
             ssh_stdin.flush()
             output = ssh_stdout.read()
@@ -50,47 +52,64 @@ def tik_reboot(ip):
     else:
         print(ip, "Unreachable")
 
-# Функция для обнаружения целевого изображения внутри скриншота с экрана.
+def stik_reboot(ip):
+    response = os.system("fping " + ip + " >/dev/null")
+    if response == 0:
+        try:
+            print('\nConnecting to ' + ip)
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            ssh.connect(ip, username = stik_login, password = stik_pass, port = 22349)
+            ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command("sudo -S reboot")
+            ssh_stdin.write(stik_pass + '\n')
+            ssh_stdin.flush()
+            output = ssh_stdout.read()
+            print(output)
+        except Exception as e:
+            print(e)
+    else:
+        print(ip, "Unreachable")
+
+# Функция для обнаружения целевого изображения внутри скриншота с экрана. Позаимствована.
 def find_image(im, tpl):
     im = np.atleast_3d(im)
     tpl = np.atleast_3d(tpl)
     H, W, D = im.shape[:3]
     h, w = tpl.shape[:2]
-
     # Integral image and template sum per channel
     sat = im.cumsum(1).cumsum(0)
     tplsum = np.array([tpl[:, :, i].sum() for i in range(D)])
-
     # Calculate lookup table for all the possible windows
     iA, iB, iC, iD = sat[:-h, :-w], sat[:-h, w:], sat[h:, :-w], sat[h:, w:]
     lookup = iD - iB - iC + iA
-
   # Possible matches
     possible_match = np.where(np.logical_and.reduce([lookup[..., i] == tplsum[i] for i in range(D)]))
   # Find exact match
-
     for y, x in zip(*possible_match):
         if np.all(im[y+1:y+h+1, x+1:x+w+1] == tpl):
             return (y+1, x+1)
-
   # raise Exception("Image not found")
 
 # Образец для поиска изображения.
 tpl = cv2.imread(work_dir + 'service_regime.png', 1)
 
-# Поочередно обрабатываются скриншоты, при совпадении - ТИК перезагружается, данные добавляются
+# Поочередно обрабатываются скриншоты, при совпадении - попытка перезагрузить ТИК, данные добавляются
 #  в тело письма. При любом исходе - файлы перемещаются в папку moved.
 for filename in os.listdir(work_dir + 'pict/'):
     if filename.endswith(".png"):
         im = cv2.imread(work_dir + 'pict/' + filename, 1)
-
         try:
             y, x = find_image(im, tpl)
             with open(work_dir + 'logs/' + fileName_log + '.log', 'a', encoding = 'utf-8') as file_log:
                 print(str(filename[:-4]), file = file_log)
             body_letter += ("\n" + "ТИК " + str(filename[:-4]) + " в режиме обслуживания" + "\n")
-            tik_reboot(str(filename[:-4]))
-
+            with open("suo_host.txt", 'r', encoding = 'utf8') as hosts:
+                for id_str in hosts:
+                    if id_str == str(filename[:-4]):
+                        suo_tik_reboot(str(filename[:-4]))
+            with open("stik_host.txt", 'r', encoding = 'utf8') as hosts:
+                for id_str in hosts:
+                    if id_str == str(filename[:-4]):
+                        stik_reboot(str(filename[:-4]))
         except:
             print("Image not found")
             ok_cnt += 1
