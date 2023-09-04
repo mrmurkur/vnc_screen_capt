@@ -23,16 +23,15 @@ suo_tik_login = config["tik"]["login"]
 suo_tik_pass  = config["tik"]["password"]
 stik_login = config["stik"]["login"]
 stik_pass  = config["stik"]["password"]
+vnc_pass = config["stik"]["vnc_password"]
 body_letter = ""
 ok_cnt = 0
 ssh = paramiko.SSHClient()
 fileName_log = str(datetime.now())
 
-# Запускаются скрипты для поочередного подключения по vnc к устройствам и создания скриншота экрана.
+# Скриншоты с ТИКов собираются через vnccapture, а со СТИКов копированием картинки непосредственно.
 # PNG файлы складываются в папку pict.
-for filename_sh in os.listdir(work_dir):
-    if filename_sh.endswith(".sh"):
-        subprocess.call(['bash', work_dir + filename_sh])
+subprocess.run(['bash', work_dir + "vnc.sh", vnc_pass, stik_pass])
 
 # Функция для подключения по ssh к неисправному устройству с целью перезагрузки.
 def suo_tik_reboot(ip):
@@ -64,6 +63,7 @@ def stik_reboot(ip):
             ssh_stdin.flush()
             output = ssh_stdout.read()
             print(output)
+            print("command executed")
         except Exception as e:
             print(e)
     else:
@@ -102,20 +102,21 @@ for filename in os.listdir(work_dir + 'pict/'):
             with open(work_dir + 'logs/' + fileName_log + '.log', 'a', encoding = 'utf-8') as file_log:
                 print(str(filename[:-4]), file = file_log)
             body_letter += ("\n" + "ТИК " + str(filename[:-4]) + " в режиме обслуживания" + "\n")
-            with open("suo_host.txt", 'r', encoding = 'utf8') as hosts:
+            with open(work_dir + "suo_host.txt", 'r', encoding = 'utf8') as hosts:
                 for id_str in hosts:
-                    if id_str == str(filename[:-4]):
+                    if id_str.rstrip() == str(filename[:-4]):
                         suo_tik_reboot(str(filename[:-4]))
-            with open("stik_host.txt", 'r', encoding = 'utf8') as hosts:
+                        body_letter += ("\n" + str(filename[:-4]) + " перезагружен" + "\n")
+            with open(work_dir + "stik_host.txt", 'r', encoding = 'utf8') as hosts:
                 for id_str in hosts:
-                    if id_str == str(filename[:-4]):
+                    if id_str.rstrip() == str(filename[:-4]):
                         stik_reboot(str(filename[:-4]))
+                        body_letter += ("\n" + str(filename[:-4]) + " перезагружен" + "\n")
         except:
             print("Image not found")
             ok_cnt += 1
         shutil.move(work_dir + 'pict/' + filename, work_dir + 'pict/moved/' + filename)
                  
-
 # Отправляется письмо с результатами работы.
 text_email = u'В нормальном состоянии: \n'
 body = text_email + str(ok_cnt) + body_letter
